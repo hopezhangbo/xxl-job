@@ -225,5 +225,23 @@
 			trigger_status = #{triggerStatus}
 		WHERE id = #{id}
 	</update>
+	
+	<select id="getParentJob" parameterType="java.util.HashMap" resultMap="XxlJobInfo">
+		SELECT <include refid="Base_Column_List" />
+		FROM xxl_job_info AS t
+		WHERE EXISTS 
+		(SELECT p.parent_id FROM xxl_job_jobparent p WHERE t.id =p.parent_id  AND p.job_id =#{id})
+	</select>
+	
+	<select id="getBatchParentJob" parameterType="java.util.List" resultMap="XxlJobInfo">
+		SELECT <include refid="Base_Column_List" />
+		FROM xxl_job_info AS t
+		WHERE EXISTS 
+		(SELECT p.parent_id FROM xxl_job_jobparent p WHERE t.id =p.parent_id  AND p.job_id in 
+		<foreach collection="list" index="index" item="item" open="(" close=")" separator=",">
+			#{item.id}
+		</foreach>
+		)
+	</select>
 
 </mapper>

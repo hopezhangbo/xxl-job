@@ -56,5 +56,7 @@ public interface XxlJobLogDao {
 	public int updateAlarmStatus(@Param("logId") long logId,
 								 @Param("oldAlarmStatus") int oldAlarmStatus,
 								 @Param("newAlarmStatus") int newAlarmStatus);
+	
+	public XxlJobLog loadNew(@Param("id") long job_id);
 
 }

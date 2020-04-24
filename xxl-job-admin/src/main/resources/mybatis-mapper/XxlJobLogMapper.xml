@@ -115,6 +115,12 @@
 		FROM xxl_job_log AS t
 		WHERE t.id = #{id}
 	</select>
+	
+	<select id="loadNew" parameterType="java.lang.Long" resultMap="XxlJobLog">
+		SELECT <include refid="Base_Column_List" />
+		FROM xxl_job_log AS t
+		WHERE t.job_id = #{id}  ORDER BY id desc LIMIT 1
+	</select>
 
 	
 	<insert id="save" parameterType="com.xxl.job.admin.core.model.XxlJobLog" useGeneratedKeys="true" keyProperty="id" >
