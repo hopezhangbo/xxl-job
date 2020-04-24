@@ -115,5 +115,13 @@ INSERT INTO `xxl_job_info`(`id`, `job_group`, `job_cron`, `job_desc`, `add_time`
 INSERT INTO `xxl_job_user`(`id`, `username`, `password`, `role`, `permission`) VALUES (1, 'admin', 'e10adc3949ba59abbe56e057f20f883e', 1, NULL);
 INSERT INTO `xxl_job_lock` ( `lock_name`) VALUES ( 'schedule_lock');
 
+
+CREATE TABLE `xxl_job_jobparent` (
+  `job_id` int(11) unsigned NOT NULL,
+  `parent_id` int(11) unsigned NOT NULL,
+  `trigger_type` int(11) NOT NULL DEFAULT '0' COMMENT '0:等待\r\n1:触发父任务',
+  PRIMARY KEY (`job_id`,`parent_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='任务依赖表'
+
 commit;
 

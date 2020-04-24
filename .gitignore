@@ -7,3 +7,4 @@ target/
 .gitattributes
 .settings
 logs
+.*
