@@ -1,5 +1,6 @@
 package com.xxl.job.admin.core.conf;
 
+import com.xxl.job.admin.core.alarm.JobAlarmer;
 import com.xxl.job.admin.core.scheduler.XxlJobScheduler;
 import com.xxl.job.admin.dao.*;
 import com.xxl.job.admin.service.XxlJobService;
@@ -12,6 +13,7 @@ import org.springframework.stereotype.Component;
 
 import javax.annotation.Resource;
 import javax.sql.DataSource;
+import java.util.Arrays;
 
 /**
  * xxl-job config
@@ -66,6 +68,9 @@ public class XxlJobAdminConfig implements InitializingBean, DisposableBean {
 	@Value("${xxl.job.logretentiondays}")
 	private int logretentiondays;
 
+	@Resource
+	private XxlJobService xxlJobService;
+
 	// dao, service
 
 	@Resource
@@ -82,11 +87,13 @@ public class XxlJobAdminConfig implements InitializingBean, DisposableBean {
 	private JavaMailSender mailSender;
 	@Resource
 	private DataSource dataSource;
-
 	@Resource
-	private XxlJobService xxlJobService;
+	private JobAlarmer jobAlarmer;
 
 	public String getI18n() {
+		if (!Arrays.asList("zh_CN", "zh_TC", "en").contains(i18n)) {
+			return "zh_CN";
+		}
 		return i18n;
 	}
 
@@ -145,6 +152,10 @@ public class XxlJobAdminConfig implements InitializingBean, DisposableBean {
 
 	public DataSource getDataSource() {
 		return dataSource;
+	}
+
+	public JobAlarmer getJobAlarmer() {
+		return jobAlarmer;
 	}
 
 	public XxlJobService getXxlJobService() {

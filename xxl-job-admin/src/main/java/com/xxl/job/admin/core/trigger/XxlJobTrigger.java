@@ -1,11 +1,11 @@
 package com.xxl.job.admin.core.trigger;
 
 import com.xxl.job.admin.core.conf.XxlJobAdminConfig;
-import com.xxl.job.admin.core.scheduler.XxlJobScheduler;
 import com.xxl.job.admin.core.model.XxlJobGroup;
 import com.xxl.job.admin.core.model.XxlJobInfo;
 import com.xxl.job.admin.core.model.XxlJobLog;
 import com.xxl.job.admin.core.route.ExecutorRouteStrategyEnum;
+import com.xxl.job.admin.core.scheduler.XxlJobScheduler;
 import com.xxl.job.admin.core.util.I18nUtil;
 import com.xxl.job.admin.dao.XxlJobLogDao;
 import com.xxl.job.admin.service.XxlJobService;
@@ -13,8 +13,8 @@ import com.xxl.job.core.biz.ExecutorBiz;
 import com.xxl.job.core.biz.model.ReturnT;
 import com.xxl.job.core.biz.model.TriggerParam;
 import com.xxl.job.core.enums.ExecutorBlockStrategyEnum;
-import com.xxl.rpc.util.IpUtil;
-import com.xxl.rpc.util.ThrowableUtil;
+import com.xxl.job.core.util.IpUtil;
+import com.xxl.job.core.util.ThrowableUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -39,16 +39,17 @@ public class XxlJobTrigger {
 	 *                              config
 	 * @param executorShardingParam
 	 * @param executorParam         null: use job param not null: cover job param
+	 * @param addressList           null: use executor addressList not null: cover
 	 */
 	public static void trigger(int jobId, TriggerTypeEnum triggerType, int failRetryCount, String executorShardingParam,
-			String executorParam) {
+			String executorParam, String addressList) {
+
 		// load data
 		XxlJobInfo jobInfo = XxlJobAdminConfig.getAdminConfig().getXxlJobInfoDao().loadById(jobId);
 		if (jobInfo == null) {
 			logger.warn(">>>>>>>>>>>> trigger fail, jobId invalid，jobId={}", jobId);
 			return;
 		}
-
 		if (executorParam != null) {
 			jobInfo.setExecutorParam(executorParam);
 		}
@@ -60,6 +61,12 @@ public class XxlJobTrigger {
 
 		int finalFailRetryCount = failRetryCount >= 0 ? failRetryCount : jobInfo.getExecutorFailRetryCount();
 		XxlJobGroup group = XxlJobAdminConfig.getAdminConfig().getXxlJobGroupDao().load(jobInfo.getJobGroup());
+
+		// cover addressList
+		if (addressList != null && addressList.trim().length() > 0) {
+			group.setAddressType(1);
+			group.setAddressList(addressList.trim());
+		}
 
 		// sharding param
 		int[] shardingParam = null;
@@ -83,92 +90,6 @@ public class XxlJobTrigger {
 			}
 			processTrigger(group, jobInfo, finalFailRetryCount, triggerType, shardingParam[0], shardingParam[1]);
 		}
-
-	}
-
-	/**
-	 * 校验 父任务是否在任务时间内完成
-	 * 
-	 * @param jobInfo
-	 */
-	public static boolean validateParentJob(XxlJobInfo jobInfo) {
-		XxlJobService service = XxlJobAdminConfig.getAdminConfig().getXxlJobService();
-		XxlJobLogDao logDao = XxlJobAdminConfig.getAdminConfig().getXxlJobLogDao();
-		Stack<List<XxlJobInfo>> stack = service.getParentXXlJob(jobInfo.getId());
-		if (stack == null || stack.isEmpty())
-			return true;
-		List<XxlJobInfo> jobList = null;
-		while (!stack.isEmpty()) {
-			jobList = stack.pop();
-			Iterator<XxlJobInfo> it = jobList.iterator();
-			while (it.hasNext()) {
-				// 父任务
-				XxlJobInfo job = it.next();
-				//任务停止,跳过校验
-				if(job.getTriggerStatus()==0)
-					continue;
-				while (true) {
-					// 最新父任务的日志信息
-					XxlJobLog log = logDao.loadNew(job.getId());
-
-					// 父任务已触发
-					if (job.getTriggerLastTime() <= log.getTriggerTime().getTime()
-							|| Math.abs(job.getTriggerLastTime() - log.getTriggerTime().getTime()) <= 5000) {
-						// 父任务触发失败,停止触发任务
-						if (log.getTriggerCode() != 200) {
-							saveFailLog(job, jobInfo, log.getTriggerMsg());
-							return false;
-						}
-
-						// 未执行
-						if (log.getHandleTime() == null) {
-							// 父任务还未触发
-							sleep(1, TimeUnit.SECONDS);
-							continue;
-						}
-
-						// 执行失败
-						if (log.getHandleCode() != 200) {
-							saveFailLog(job, jobInfo, log.getHandleMsg());
-							return false;
-						}
-						break;
-
-					} else {
-						// 父任务还未触发
-						sleep(1, TimeUnit.SECONDS);
-						continue;
-					}
-				}
-
-			}
-
-		}
-		return true;
-	}
-
-	public static void sleep(long time, TimeUnit unit) {
-		try {
-			unit.sleep(time);
-		} catch (InterruptedException e) {
-			e.printStackTrace();
-		}
-	}
-
-	public static void saveFailLog(XxlJobInfo pjob, XxlJobInfo jobInfo, String errorMsg) {
-		XxlJobLog jobLog = new XxlJobLog();
-		jobLog.setJobGroup(jobInfo.getJobGroup());
-		jobLog.setJobId(jobInfo.getId());
-		jobLog.setTriggerTime(new Date());
-		jobLog.setExecutorAddress(null);
-		jobLog.setExecutorHandler(jobInfo.getExecutorHandler());
-		jobLog.setExecutorParam(jobInfo.getExecutorParam());
-		jobLog.setExecutorShardingParam(null);
-		jobLog.setExecutorFailRetryCount(-1);
-		// jobLog.setTriggerTime();
-		jobLog.setTriggerCode(500);
-		jobLog.setTriggerMsg("父任务:" + pjob.getId() + "_" + pjob.getJobDesc() + ",未完成,父任务错误信息:" + errorMsg);
-		XxlJobAdminConfig.getAdminConfig().getXxlJobLogDao().updateTriggerInfo(jobLog);
 
 	}
 
@@ -321,6 +242,92 @@ public class XxlJobTrigger {
 
 		runResult.setMsg(runResultSB.toString());
 		return runResult;
+	}
+
+	/**
+	 * 校验 父任务是否在任务时间内完成
+	 * 
+	 * @param jobInfo
+	 */
+	public static boolean validateParentJob(XxlJobInfo jobInfo) {
+		XxlJobService service = XxlJobAdminConfig.getAdminConfig().getXxlJobService();
+		XxlJobLogDao logDao = XxlJobAdminConfig.getAdminConfig().getXxlJobLogDao();
+		Stack<List<XxlJobInfo>> stack = service.getParentXXlJob(jobInfo.getId());
+		if (stack == null || stack.isEmpty())
+			return true;
+		List<XxlJobInfo> jobList = null;
+		while (!stack.isEmpty()) {
+			jobList = stack.pop();
+			Iterator<XxlJobInfo> it = jobList.iterator();
+			while (it.hasNext()) {
+				// 父任务
+				XxlJobInfo job = it.next();
+				// 任务停止,跳过校验
+				if (job.getTriggerStatus() == 0)
+					continue;
+				while (true) {
+					// 最新父任务的日志信息
+					XxlJobLog log = logDao.loadNew(job.getId());
+
+					// 父任务已触发
+					if (job.getTriggerLastTime() <= log.getTriggerTime().getTime()
+							|| Math.abs(job.getTriggerLastTime() - log.getTriggerTime().getTime()) <= 5000) {
+						// 父任务触发失败,停止触发任务
+						if (log.getTriggerCode() != 200) {
+							saveFailLog(job, jobInfo, log.getTriggerMsg());
+							return false;
+						}
+
+						// 未执行
+						if (log.getHandleTime() == null) {
+							// 父任务还未触发
+							sleep(1, TimeUnit.SECONDS);
+							continue;
+						}
+
+						// 执行失败
+						if (log.getHandleCode() != 200) {
+							saveFailLog(job, jobInfo, log.getHandleMsg());
+							return false;
+						}
+						break;
+
+					} else {
+						// 父任务还未触发
+						sleep(1, TimeUnit.SECONDS);
+						continue;
+					}
+				}
+
+			}
+
+		}
+		return true;
+	}
+
+	public static void sleep(long time, TimeUnit unit) {
+		try {
+			unit.sleep(time);
+		} catch (InterruptedException e) {
+			e.printStackTrace();
+		}
+	}
+
+	public static void saveFailLog(XxlJobInfo pjob, XxlJobInfo jobInfo, String errorMsg) {
+		XxlJobLog jobLog = new XxlJobLog();
+		jobLog.setJobGroup(jobInfo.getJobGroup());
+		jobLog.setJobId(jobInfo.getId());
+		jobLog.setTriggerTime(new Date());
+		jobLog.setExecutorAddress(null);
+		jobLog.setExecutorHandler(jobInfo.getExecutorHandler());
+		jobLog.setExecutorParam(jobInfo.getExecutorParam());
+		jobLog.setExecutorShardingParam(null);
+		jobLog.setExecutorFailRetryCount(-1);
+		// jobLog.setTriggerTime();
+		jobLog.setTriggerCode(500);
+		jobLog.setTriggerMsg("父任务:" + pjob.getId() + "_" + pjob.getJobDesc() + ",未完成,父任务错误信息:" + errorMsg);
+		XxlJobAdminConfig.getAdminConfig().getXxlJobLogDao().updateTriggerInfo(jobLog);
+
 	}
 
 }

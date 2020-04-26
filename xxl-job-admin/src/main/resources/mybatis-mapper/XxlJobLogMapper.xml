@@ -115,12 +115,6 @@
 		FROM xxl_job_log AS t
 		WHERE t.id = #{id}
 	</select>
-	
-	<select id="loadNew" parameterType="java.lang.Long" resultMap="XxlJobLog">
-		SELECT <include refid="Base_Column_List" />
-		FROM xxl_job_log AS t
-		WHERE t.job_id = #{id}  ORDER BY id desc LIMIT 1
-	</select>
 
 	
 	<insert id="save" parameterType="com.xxl.job.admin.core.model.XxlJobLog" useGeneratedKeys="true" keyProperty="id" >
@@ -161,7 +155,7 @@
 		SET 
 			`handle_time`= #{handleTime}, 
 			`handle_code`= #{handleCode},
-			`handle_msg`= #{handleMsg} 
+			`handle_msg`= #{handleMsg}
 		WHERE `id`= #{id}
 	</update>
 	
@@ -251,5 +245,22 @@
 			`alarm_status` = #{newAlarmStatus}
 		WHERE `id`= #{logId} AND `alarm_status` = #{oldAlarmStatus}
 	</update>
-	
+
+	<select id="findLostJobIds" resultType="long" >
+		SELECT t.id
+		FROM xxl_job_log AS t
+		WHERE t.trigger_code = 200
+			and t.handle_code = 0
+			and t.trigger_time <![CDATA[ <= ]]> #{losedTime}
+			and t.executor_address not in (
+				SELECT t2.registry_value
+				FROM xxl_job_registry AS t2
+			)
+	</select>
+
+	<select id="loadNew" parameterType="java.lang.Long" resultMap="XxlJobLog">
+		SELECT <include refid="Base_Column_List" />
+		FROM xxl_job_log AS t
+		WHERE t.job_id = #{id}  ORDER BY id desc LIMIT 1
+	</select>
 </mapper>
